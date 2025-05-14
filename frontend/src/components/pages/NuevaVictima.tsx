@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 const API_URL = 'http://localhost:8000'; // Adjust based on your backend URL
@@ -36,10 +36,54 @@ const NuevaVictima = () => {
   const timerCausaRef = useRef<number | null>(null);
   const timerDetallesRef = useRef<number | null>(null);
   
+  // Estado para determinar si los botones de cancelar y volver deberían ser visibles
+  const [botonesCancelarVisibles, setBotonesCancelarVisibles] = useState<boolean>(true);
+  
+  // Nueva función para registrar muerte por defecto (ataque al corazón)
+  const registrarMuertePorDefecto = async (id: number) => {
+    try {
+      // Registrar causa de muerte como ataque al corazón
+      await axios.post(`${API_URL}/people/${id}/death-cause`, {
+        cause: 'Ataque al corazón'
+      });
+
+      // Registrar estado de muerte con fecha 40 segundos en el futuro
+      await axios.post(`${API_URL}/people/${id}/death-status`, {
+        isDead: true,
+        deathDate: new Date(Date.now() + 40000).toISOString() // 40 segundos en el futuro
+      });
+    } catch (error) {
+      console.error('Error al registrar muerte por defecto:', error);
+    }
+  };
+  
+  // Función para manejar la salida prematura (botones "Cancelar" y "Volver al menú")
+  const handleSalirPrematuramente = async () => {
+    // Si la persona ha sido registrada pero no la causa, registrar la muerte por defecto
+    if (personaRegistrada && personaId && !causaRegistrada) {
+      await registrarMuertePorDefecto(personaId);
+      alert('La víctima morirá de un ataque al corazón en 40 segundos.');
+    }
+    
+    // Navegar al menú
+    navigate('/menu');
+  };
+  
   // Efecto para mostrar/ocultar el campo personalizado según la selección
   useEffect(() => {
     setMostrarCampoPersonalizado(causaMuerte === 'Personalizada');
   }, [causaMuerte]);
+  
+  // Efecto para actualizar la visibilidad de los botones de cancelación
+  useEffect(() => {
+    // Ocultar botones cuando las barras de tiempo están activas
+    if ((personaRegistrada && !causaRegistrada && tiempoParaCausa > 0) || 
+        (causaRegistrada && tiempoParaDetalles > 0)) {
+      setBotonesCancelarVisibles(false);
+    } else {
+      setBotonesCancelarVisibles(true);
+    }
+  }, [personaRegistrada, causaRegistrada, tiempoParaCausa, tiempoParaDetalles]);
   
   // Efecto para manejar el temporizador de causa de muerte (40 segundos)
   useEffect(() => {
@@ -93,10 +137,17 @@ const NuevaVictima = () => {
   
   // Efecto para ocultar formulario de causa cuando se acaba el tiempo
   useEffect(() => {
-    if (tiempoParaCausa === 0 && !causaRegistrada) {
+    if (tiempoParaCausa === 0 && !causaRegistrada && personaId) {
       setMostrarFormCausa(false);
       
-      // Si se acabó el tiempo y no se registró causa, mostrar mensaje
+      // Si se acabó el tiempo y no se registró causa, registrar muerte por defecto
+      const registrarAtaquePorDefecto = async () => {
+        await registrarMuertePorDefecto(personaId);
+      };
+      
+      registrarAtaquePorDefecto();
+      
+      // Mostrar mensaje
       alert('Tiempo agotado. La víctima morirá de un ataque al corazón.');
       
       // Redireccionar al menú después de 2 segundos
@@ -104,14 +155,28 @@ const NuevaVictima = () => {
         navigate('/menu');
       }, 2000);
     }
-  }, [tiempoParaCausa, causaRegistrada, navigate]);
+  }, [tiempoParaCausa, causaRegistrada, navigate, personaId]);
   
   // Efecto para ocultar formulario de detalles cuando se acaba el tiempo
   useEffect(() => {
-    if (tiempoParaDetalles === 0 && causaRegistrada) {
+    if (tiempoParaDetalles === 0 && causaRegistrada && personaId) {
       setMostrarFormDetalles(false);
       
-      // Si se acabó el tiempo y no se registraron detalles, mostrar mensaje
+      // Si se acabó el tiempo y no se registraron detalles, registrar muerte sin detalles
+      const registrarMuerteSinDetalles = async () => {
+        try {
+          await axios.post(`${API_URL}/people/${personaId}/death-status`, {
+            isDead: true,
+            deathDate: new Date(Date.now() + 40000).toISOString() // 40 segundos en el futuro
+          });
+        } catch (error) {
+          console.error('Error al registrar estado de muerte:', error);
+        }
+      };
+      
+      registrarMuerteSinDetalles();
+      
+      // Mostrar mensaje
       alert('Tiempo agotado para añadir detalles. La víctima morirá en 40 segundos.');
       
       // Redireccionar al menú después de 2 segundos
@@ -119,7 +184,7 @@ const NuevaVictima = () => {
         navigate('/menu');
       }, 2000);
     }
-  }, [tiempoParaDetalles, causaRegistrada, navigate]);
+  }, [tiempoParaDetalles, causaRegistrada, navigate, personaId]);
   
   // Función para manejar el registro de la persona
   const handleRegistrarPersona = async (e: FormEvent) => {
@@ -196,13 +261,17 @@ const NuevaVictima = () => {
           setTimeout(() => {
             navigate('/menu');
           }, 2000);
+          await axios.post(`${API_URL}/people/${personaId}/death-status`, {
+            isDead: true,
+            deathDate: new Date(Date.now() + 40000).toISOString()
+          });
         }
       } else {
         throw new Error('No se pudo registrar la causa de muerte');
       }
     } catch (error) {
       console.error('Error al registrar causa de muerte:', error);
-      alert('Error al registrar la causa de muerte.');
+      
     } finally {
       setSubmitting(false);
     }
@@ -237,12 +306,16 @@ const NuevaVictima = () => {
         setTimeout(() => {
           navigate('/menu');
         }, 2000);
+        await axios.post(`${API_URL}/people/${personaId}/death-status`, {
+          isDead: true,
+          deathDate: new Date(Date.now() + 40000).toISOString()
+        });
       } else {
         throw new Error('No se pudieron registrar los detalles');
       }
     } catch (error) {
       console.error('Error al registrar detalles:', error);
-      alert('Error al registrar los detalles de la muerte.');
+      
     } finally {
       setSubmitting(false);
     }
@@ -321,38 +394,40 @@ const NuevaVictima = () => {
             </div>
           </div>
           
-          {/* Botón para volver al menú */}
-          <div className="row mb-4">
-            <div className="col-md-6 ms-auto me-auto d-flex justify-content-center">
-              <Link 
-                to="/menu"
-                style={{
-                  display: 'inline-block',
-                  backgroundColor: 'white',
-                  color: 'black',
-                  padding: '0.5rem 1.5rem',
-                  border: '1px solid #222',
-                  borderRadius: '0.25rem',
-                  fontSize: 'clamp(0.9rem, 1.5vw, 1.1rem)',
-                  fontFamily: "'Crimson Text', Georgia, serif",
-                  fontWeight: '600',
-                  textDecoration: 'none',
-                  boxShadow: '0 .125rem .25rem rgba(0,0,0,.075)',
-                  transition: 'all 0.3s ease'
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.backgroundColor = '#666666';
-                  e.currentTarget.style.color = 'white';
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.backgroundColor = 'white';
-                  e.currentTarget.style.color = 'black';
-                }}
-              >
-                Volver al menú
-              </Link>
+          {/* Botón para volver al menú - Visible solo cuando no hay contadores activos */}
+          {botonesCancelarVisibles && (
+            <div className="row mb-4">
+              <div className="col-md-6 ms-auto me-auto d-flex justify-content-center">
+                <button 
+                  onClick={handleSalirPrematuramente}
+                  style={{
+                    display: 'inline-block',
+                    backgroundColor: 'white',
+                    color: 'black',
+                    padding: '0.5rem 1.5rem',
+                    border: '1px solid #222',
+                    borderRadius: '0.25rem',
+                    fontSize: 'clamp(0.9rem, 1.5vw, 1.1rem)',
+                    fontFamily: "'Crimson Text', Georgia, serif",
+                    fontWeight: '600',
+                    textDecoration: 'none',
+                    boxShadow: '0 .125rem .25rem rgba(0,0,0,.075)',
+                    transition: 'all 0.3s ease'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.backgroundColor = '#666666';
+                    e.currentTarget.style.color = 'white';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.backgroundColor = 'white';
+                    e.currentTarget.style.color = 'black';
+                  }}
+                >
+                  Volver al menú
+                </button>
+              </div>
             </div>
-          </div>
+          )}
           
           {/* Formulario para añadir nueva víctima */}
           <div className="row">
@@ -453,35 +528,37 @@ const NuevaVictima = () => {
                       
                       {/* Botones de acción para la primera etapa */}
                       <div className="d-flex justify-content-center gap-3 mt-5">
-                        <button 
-                          type="button" 
-                          className="btn"
-                          onClick={() => navigate('/menu')}
-                          style={{
-                            backgroundColor: 'white',
-                            color: 'black',
-                            padding: '0.5rem 1.5rem',
-                            border: '1px solid #222',
-                            borderRadius: '0.25rem',
-                            fontSize: '1.1rem',
-                            fontFamily: "'Crimson Text', Georgia, serif",
-                            fontWeight: '600',
-                            textDecoration: 'none',
-                            boxShadow: '0 .125rem .25rem rgba(0,0,0,.075)',
-                            transition: 'all 0.3s ease'
-                          }}
-                          onMouseOver={(e) => {
-                            e.currentTarget.style.backgroundColor = '#666666';
-                            e.currentTarget.style.color = 'white';
-                          }}
-                          onMouseOut={(e) => {
-                            e.currentTarget.style.backgroundColor = 'white';
-                            e.currentTarget.style.color = 'black';
-                          }}
-                          disabled={submitting}
-                        >
-                          Cancelar
-                        </button>
+                        {botonesCancelarVisibles && (
+                          <button 
+                            type="button" 
+                            className="btn"
+                            onClick={handleSalirPrematuramente}
+                            style={{
+                              backgroundColor: 'white',
+                              color: 'black',
+                              padding: '0.5rem 1.5rem',
+                              border: '1px solid #222',
+                              borderRadius: '0.25rem',
+                              fontSize: '1.1rem',
+                              fontFamily: "'Crimson Text', Georgia, serif",
+                              fontWeight: '600',
+                              textDecoration: 'none',
+                              boxShadow: '0 .125rem .25rem rgba(0,0,0,.075)',
+                              transition: 'all 0.3s ease'
+                            }}
+                            onMouseOver={(e) => {
+                              e.currentTarget.style.backgroundColor = '#666666';
+                              e.currentTarget.style.color = 'white';
+                            }}
+                            onMouseOut={(e) => {
+                              e.currentTarget.style.backgroundColor = 'white';
+                              e.currentTarget.style.color = 'black';
+                            }}
+                            disabled={submitting}
+                          >
+                            Cancelar
+                          </button>
+                        )}
                         
                         <button 
                           type="submit" 
@@ -538,11 +615,11 @@ const NuevaVictima = () => {
                         >
                           <div 
                             style={{ 
-                            width: `${causaTimePercentage}%`, 
-                            height: '100%', 
-                            backgroundColor: causaTimePercentage < 25 ? '#ff3b30' : '#4cd964',
-                            transition: 'width 1s linear'
-                          }}
+                              width: `${causaTimePercentage}%`, 
+                              height: '100%', 
+                              backgroundColor: causaTimePercentage < 25 ? '#ff3b30' : '#4cd964',
+                              transition: 'width 1s linear'
+                            }}
                           />
                         </div>
                       </div>
@@ -565,7 +642,6 @@ const NuevaVictima = () => {
                           id="causaMuerte"
                           value={causaMuerte}
                           onChange={(e) => setCausaMuerte(e.target.value)}
-                          required
                           style={{
                             backgroundColor: 'rgba(255, 255, 255, 0.9)',
                             border: '1px solid #444',
@@ -619,38 +695,8 @@ const NuevaVictima = () => {
                         </div>
                       )}
                       
-                      {/* Botones de acción para la segunda etapa */}
+                      {/* Botones de acción para la segunda etapa - No se muestran los botones de cancelar */}
                       <div className="d-flex justify-content-center gap-3 mt-5">
-                        <button 
-                          type="button" 
-                          className="btn"
-                          onClick={() => navigate('/menu')}
-                          style={{
-                            backgroundColor: 'white',
-                            color: 'black',
-                            padding: '0.5rem 1.5rem',
-                            border: '1px solid #222',
-                            borderRadius: '0.25rem',
-                            fontSize: '1.1rem',
-                            fontFamily: "'Crimson Text', Georgia, serif",
-                            fontWeight: '600',
-                            textDecoration: 'none',
-                            boxShadow: '0 .125rem .25rem rgba(0,0,0,.075)',
-                            transition: 'all 0.3s ease'
-                          }}
-                          onMouseOver={(e) => {
-                            e.currentTarget.style.backgroundColor = '#666666';
-                            e.currentTarget.style.color = 'white';
-                          }}
-                          onMouseOut={(e) => {
-                            e.currentTarget.style.backgroundColor = 'white';
-                            e.currentTarget.style.color = 'black';
-                          }}
-                          disabled={submitting}
-                        >
-                          Cancelar
-                        </button>
-                        
                         <button 
                           type="submit" 
                           style={{
@@ -682,12 +728,12 @@ const NuevaVictima = () => {
                     </form>
                   )}
                   
-                  {/* Tercera etapa: Detalles específicos (aparece después de registrar la causa) */}
+                  {/* Tercera etapa: Detalles de la muerte (aparece después de registrar la causa) */}
                   {causaRegistrada && mostrarFormDetalles && (
                     <form onSubmit={handleRegistrarDetalles}>
                       <div className="text-center mb-4">
                         <h3 style={{ fontWeight: 'bold', textShadow: '1px 1px 2px rgba(0, 0, 0, 0.8)' }}>
-                          Tiempo restante para especificar detalles
+                          Tiempo restante para agregar detalles
                         </h3>
                         <div style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '10px' }}>
                           {formatTime(tiempoParaDetalles)}
@@ -706,16 +752,16 @@ const NuevaVictima = () => {
                         >
                           <div 
                             style={{ 
-                            width: `${detallesTimePercentage}%`, 
-                            height: '100%', 
-                            backgroundColor: detallesTimePercentage < 25 ? '#ff3b30' : '#4cd964',
-                            transition: 'width 1s linear'
-                          }}
-                        />
+                              width: `${detallesTimePercentage}%`, 
+                              height: '100%', 
+                              backgroundColor: detallesTimePercentage < 25 ? '#ff3b30' : '#4cd964',
+                              transition: 'width 1s linear'
+                            }}
+                          />
                         </div>
                       </div>
                       
-                      {/* Campo: Detalles */}
+                      {/* Campo: Detalles de la muerte */}
                       <div className="mb-4">
                         <label 
                           htmlFor="detalles" 
@@ -726,61 +772,61 @@ const NuevaVictima = () => {
                             fontSize: '1.1rem'
                           }}
                         >
-                          Detalles específicos
+                          Detalles de la muerte (opcional)
                         </label>
                         <textarea 
                           className="form-control" 
-                          id="detalles" 
-                          rows={4}
+                          id="detalles"
                           value={detalles}
                           onChange={(e) => setDetalles(e.target.value)}
-                          required
+                          rows={5}
                           style={{
                             backgroundColor: 'rgba(255, 255, 255, 0.9)',
                             border: '1px solid #444',
                             padding: '0.7rem',
                             fontFamily: "'Crimson Text', Georgia, serif",
-                            fontSize: '1.1rem',
-                            resize: 'vertical'
+                            fontSize: '1.1rem'
                           }}
                           placeholder="Describe los detalles específicos de la muerte..."
                         />
                         <small className="form-text" style={{ color: 'rgba(255, 255, 255, 0.8)' }}>
-                          Puedes especificar circunstancias, hora, lugares y otros detalles
+                          Puedes especificar circunstancias, hora, lugar y otros detalles
                         </small>
                       </div>
                       
-                      {/* Botones de acción para la tercera etapa */}
+                      {/* Botones de acción para la tercera etapa - Sin botones de cancelar cuando el timer está activo */}
                       <div className="d-flex justify-content-center gap-3 mt-5">
-                        <button 
-                          type="button" 
-                          className="btn"
-                          onClick={() => navigate('/menu')}
-                          style={{
-                            backgroundColor: 'white',
-                            color: 'black',
-                            padding: '0.5rem 1.5rem',
-                            border: '1px solid #222',
-                            borderRadius: '0.25rem',
-                            fontSize: '1.1rem',
-                            fontFamily: "'Crimson Text', Georgia, serif",
-                            fontWeight: '600',
-                            textDecoration: 'none',
-                            boxShadow: '0 .125rem .25rem rgba(0,0,0,.075)',
-                            transition: 'all 0.3s ease'
-                          }}
-                          onMouseOver={(e) => {
-                            e.currentTarget.style.backgroundColor = '#666666';
-                            e.currentTarget.style.color = 'white';
-                          }}
-                          onMouseOut={(e) => {
-                            e.currentTarget.style.backgroundColor = 'white';
-                            e.currentTarget.style.color = 'black';
-                          }}
-                          disabled={submitting}
-                        >
-                          Cancelar
-                        </button>
+                        {botonesCancelarVisibles && (
+                          <button 
+                            type="button" 
+                            className="btn"
+                            onClick={handleSalirPrematuramente}
+                            style={{
+                              backgroundColor: 'white',
+                              color: 'black',
+                              padding: '0.5rem 1.5rem',
+                              border: '1px solid #222',
+                              borderRadius: '0.25rem',
+                              fontSize: '1.1rem',
+                              fontFamily: "'Crimson Text', Georgia, serif",
+                              fontWeight: '600',
+                              textDecoration: 'none',
+                              boxShadow: '0 .125rem .25rem rgba(0,0,0,.075)',
+                              transition: 'all 0.3s ease'
+                            }}
+                            onMouseOver={(e) => {
+                              e.currentTarget.style.backgroundColor = '#666666';
+                              e.currentTarget.style.color = 'white';
+                            }}
+                            onMouseOut={(e) => {
+                              e.currentTarget.style.backgroundColor = 'white';
+                              e.currentTarget.style.color = 'black';
+                            }}
+                            disabled={submitting}
+                          >
+                            Omitir detalles
+                          </button>
+                        )}
                         
                         <button 
                           type="submit" 
@@ -822,15 +868,4 @@ const NuevaVictima = () => {
   );
 };
 
-// Corregir los problemas mencionados:
-// 1. Ya está importado axios en la línea 3
-// 2. Corregir las referencias a los timers
-// 3. Agregar tipos adecuados para los event handlers y otros parámetros
-
-// Modificar el tipo de FormEvent para que sea específico
-interface FormEvent extends React.FormEvent<HTMLFormElement> {
-  preventDefault(): void;
-}
-
-// Exportar el componente
-export default NuevaVictima;
+export default NuevaVictima;
