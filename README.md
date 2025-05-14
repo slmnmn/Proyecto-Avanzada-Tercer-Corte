@@ -1,10 +1,7 @@
 ## Configuración de entorno
 
-```
 Verifique primero su archivo de variable de entorno dentro de la carpeta del backend
 (Sea que use o no vaya a usar un contenedor).
-
-```
 
 ## Usando docker
 
