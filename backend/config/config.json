@@ -1,0 +1,8 @@
+{
+  "address": ":8000",
+  "database": "postgres",
+  "death_note_delay": 40,
+  "death_detail_delay": 400,
+  "death_with_cause_delay": 40,
+  "default_heart_attack_delay": 40
+}
