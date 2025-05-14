@@ -30,6 +30,6 @@ npm install vite
 npm install axios
 ```
 
-### Corriendo la aplicación
+## Corriendo la aplicación
 En el caso que quiera usar la aplicación sin el contenedor del back, le recomendamos entonces cambiar el string de conexión a la base de datos o usar bien el .env en el back.
 Por otro lado, siga los procedimientos de ejecución que se hacen normalmente.
